@@ -1,8 +1,8 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import cv2,os
 from math import *
 from numba import jit
-from joblib import Parallel, delayed
 # from scipy.interpolate import interp1d
 
 class Transform:
@@ -10,8 +10,8 @@ class Transform:
     # The CIE 2-deg XYZ transformed from the CIE (2006) 2-deg LMS cone fundamentals
     # Color matching function for 390 -- 830 nm with 1nm step available at http://cvrl.ucl.ac.uk/cmfs.htm
     """
-    cmf = np.loadtxt('/home/anis/PycharmProjects/ms_project/venv/Codes/requirements/lin2012xyz2e_1_7sf.txt')
-    illuminant = np.load('/home/anis/PycharmProjects/ms_project/venv/Codes/requirements/extended_D65_380_1000_interp1nm.npy')
+    cmf = np.loadtxt('/utils/lin2012xyz2e_1_7sf.txt')
+    illuminant = np.load('/utils/extended_D65_380_1000_interp1nm.npy')
     closests_idx = []
     closest_illuminant = []
     closests_wvs = []
@@ -19,7 +19,7 @@ class Transform:
     #
     def find_closest_spectra_cmf_illuminant_with_interpolation(self,camera_wvs):
         """ This function finds the shared wavelengths among camera SSFs, illuminant,  and the CIE color matching function.
-        It returns the closet wavelength index in camera SSFs and nthe closest CIE color matching function values.
+        It returns the closet wavelength index in camera SSFs and the closest CIE color matching function values.
         Illuminant is Extended D65 by default.
         Inputs:
         camera_wvs:  Wavelengths sampled by camera filters. They are interpolated above for better accuracy
@@ -33,7 +33,7 @@ class Transform:
         min_wv = np.min(camera_wvs)
         max_wv = np.max(camera_wvs)
         camera_new_wvs = np.arange(min_wv, max_wv, 1)
-        #------ For imec spectra
+        #------ For camera spectra
         closestFound_1 = self.get_closest_wavelengths(cmf_wvs, camera_new_wvs)
         #------ For cmf functions
         closestFound_2 = self.get_closest_wavelengths(camera_new_wvs,cmf_wvs)
@@ -63,7 +63,7 @@ class Transform:
            """
         illuminant_wvs = self.illuminant[:,0] #
         cmf_wvs = self.cmf[:, 0] # 390 nm -- 830 nm with 1 nm step
-        #------ For imec spectra
+        #------ For camera spectra
         closestFound_1 = self.get_closest_wavelengths(cmf_wvs, camera_wvs)
         #------ For cmf functions
         closestFound_2 = self.get_closest_wavelengths(camera_wvs,cmf_wvs)
@@ -71,6 +71,7 @@ class Transform:
         closestFound_1 = closestFound_1[:min_count]
         new_camera_wvs = camera_wvs[closestFound_1]
         self.closests_wvs = new_camera_wvs
+        spectra = spectra[:,closestFound_1]
         closestFound_2 = closestFound_2[:min_count]
         self.cmf_values = self.cmf[closestFound_2, 1:]
         #------- For Illuminant
@@ -103,7 +104,7 @@ class Transform:
         XYZ_img = np.dstack((X, Y, Z))
         return XYZ_img
 
-    @staticmethod # trick to use numba to speed up class methods, however we can not acces variables defined outside the method using self
+    @staticmethod
     @jit(nopython=True)
     def radiance_to_xyz_v2(radiance_spectra,closest_idx, cmf_values,lines,columns):
         """Convert radiance spectra to an XYZ color space. Radiance is interpolated for better accuracy
@@ -130,7 +131,8 @@ class Transform:
     @jit(nopython=True)
     def reflectance_to_xyz(reflectance_spectra, cmf_values,illumination, normalization_factor, lines, columns):
         """Convert reflectance spectra to XYZ space.
-        The spectrum must be on the same grid of points as the colour-matching function"""
+        The spectrum must be on the same grid of points as the colour-matching function """
+
         Nb_pixels = len(reflectance_spectra)
         x = np.zeros(Nb_pixels, dtype=np.float64)
         y = np.zeros(Nb_pixels, dtype=np.float64)
@@ -153,7 +155,8 @@ class Transform:
     @jit(nopython=True)
     def reflectance_to_xyz_v2(reflectance_spectra,closest_idx, cmf_values, illumination, normalization_factor, lines, columns):
         """ Convert reflectance spectra to XYZ space. Reflectance is interpolated for better accuarcy.
-        The spectrum must be on the same grid of points as the colour-matching function"""
+        The spectrum must be on the same grid of points as the colour-matching function """
+
         Nb_pixels = len(reflectance_spectra)
         x = np.zeros(Nb_pixels, dtype=np.float64)
         y = np.zeros(Nb_pixels, dtype=np.float64)
@@ -427,37 +430,15 @@ class Transform:
         closest_bands, counts = np.unique(potentialClosest, return_counts=True)
         return closest_bands
 
-    def get_closest_radiance_spectra_to_rgbssfs(self,envi_imec, rgb_ssfs):
-        ignored_bands_idx1 = [0, 1, 2, 3, 4, 5, 6, 7, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70] # bandes redondantes Snapscan
-        ignored_bands_idx2 = [x for x in range(169, 192)]# bandes redondantes Snapscan
-        all_ignored_bands = ignored_bands_idx1 + ignored_bands_idx2  #
-        used_bands = [k for k in range(192) if k not in all_ignored_bands]
-        imec_wvs = envi_imec.metadata['wavelength']
-        imec_wvs = [np.round(np.float(imec_wvs[i]), 1) for i in range(len(imec_wvs))]
-        imec_wvs = np.asarray(imec_wvs).astype(np.float32)
-        imec_wvs = imec_wvs[used_bands]
-        rgb_wvs = rgb_ssfs[:, 0]
-        closest_bands_imec = self.get_closest_wavelengths(rgb_wvs, imec_wvs)  # imec side
-        closest_bands_rgb = self.get_closest_wavelengths(imec_wvs, rgb_wvs)  # rgb side
-        min_count = np.min((len(closest_bands_imec), len(closest_bands_rgb)))  # make even closest indexes
-        closest_bands_imec = closest_bands_imec[:min_count]  # imec side
-        closest_bands_rgb = closest_bands_rgb[:min_count]  # rgb side
-        cube = envi_imec.asarray()
-        cube = cube[:,:,used_bands]
-        closest_radiance_spectra = cube[:,:,closest_bands_imec]
-        lines,columns, K = closest_radiance_spectra.shape
-        closest_radiance_spectra = closest_radiance_spectra.reshape((lines * columns), K)
-        return closest_radiance_spectra,closest_bands_rgb
-
     def get_closest_reflectance_spectra_to_rgbssfs_and_illuminant(self,camera_wvs, rgb_ssfs,illuminant):
         rgb_wvs = rgb_ssfs[:, 0]
         illuminant_wvs = illuminant[:, 0]
-        # IMEC & RGB side
-        closest_idx_bands_camera = self.get_closest_wavelengths(rgb_wvs, camera_wvs)  # imec side
-        closest_bands_rgb = self.get_closest_wavelengths(camera_wvs, rgb_wvs)  # rgb side
+        # Spectral & RGB side
+        closest_idx_bands_camera = self.get_closest_wavelengths(rgb_wvs, camera_wvs)  # ms camera side
+        closest_bands_rgb = self.get_closest_wavelengths(camera_wvs, rgb_wvs)  # rgb camera side
         min_count = np.min([len(closest_idx_bands_camera), len(closest_bands_rgb)])  # make it even
-        closest_idx_bands_camera = closest_idx_bands_camera[:min_count]  # imec side
-        closest_idx_bands_rgb = closest_bands_rgb[:min_count]  # rgb side
+        closest_idx_bands_camera = closest_idx_bands_camera[:min_count]  # ms camera side
+        closest_idx_bands_rgb = closest_bands_rgb[:min_count]  # rgb camera side
         new_camera_wvs = camera_wvs[closest_idx_bands_camera]
         # Illuminant side
         closest_idx_bands_illuminant = self.get_closest_wavelengths(new_camera_wvs, illuminant_wvs)  # illuminant side
@@ -525,6 +506,7 @@ class Transform:
     @staticmethod  # Trick to use numba in a Class
     @jit(nopython=True)
     def Spectralreflectance_to_RGBNIR_radiance(closest_reflectance_spectra, rgb_nir_ssfs,illuminant,closest_bands_rgb_nir,closest_bands_illuminant,lines,columns):
+
         closest_blue_ssfs = rgb_nir_ssfs[closest_bands_rgb_nir, 1]
         closest_green_ssfs = rgb_nir_ssfs[closest_bands_rgb_nir, 2]
         closest_red_ssfs = rgb_nir_ssfs[closest_bands_rgb_nir, 3]
@@ -557,8 +539,7 @@ class Transform:
     @staticmethod
     @jit(nopython=True)
     def Spectralradiance_to_RGB(closest_radiance_spectra,rgb_ssfs,closest_bands_rgb,lines,columns):
-        #---------------------------------------------------------------------------------------------------------------
-        # rgb_ssfs[:,1:]  =   rgb_ssfs[:,1:] / np.max(np.sum(rgb_ssfs[:,1:], 0)) # Normalize SSFS
+
         closest_blue_ssfs = rgb_ssfs[closest_bands_rgb, 1]
         closest_green_ssfs = rgb_ssfs[closest_bands_rgb, 2]
         closest_red_ssfs = rgb_ssfs[closest_bands_rgb, 3]
@@ -589,9 +570,6 @@ class Transform:
     @staticmethod
     @jit(nopython=True)
     def Spectralreflectance_to_RGB(reflectance_spectra, rgb_ssfs,illuminant,closest_idx_bands_camera,closest_idx_bands_rgb,closest_idx_bands_illuminant,lines,columns):
-        # closest_cube = cube[:, :, closest_bands_imec]
-        # lines,columns, K = closest_cube.shape
-        # closest_spectra = closest_cube.reshape((lines * columns),K)
         # -------------------------Normalize SSFS and illuminant between 0 and 1 ------------------------------------------------
         rgb_ssfs[:, 1] = rgb_ssfs[:, 1] / np.sum(rgb_ssfs[:, 1])
         rgb_ssfs[:, 2] = rgb_ssfs[:, 2] / np.sum(rgb_ssfs[:, 2])
@@ -621,73 +599,8 @@ class Transform:
         # R = R/np.max(R)
         # G = G/np.max(G)
         # B = B/np.max(B)
-        #
         RGB = np.dstack((R, G, B))
         return RGB
-
-    @staticmethod
-    @jit(nopython=True)
-    def simulate_NIR_band_from_reflectance(cube, imec_ssfs,illuminant):
-        lines, columns, _ = cube.shape
-        imec_NIR_wvs = imec_ssfs['virtual_centers'][81:]
-        illuminant_wvs = illuminant[:,0]
-        # illuminant side
-        dist = np.abs(imec_NIR_wvs[:,np.newaxis], illuminant_wvs)
-        temp1 = dist.argmin(axis=1)
-        closest_bands_illuminant, _ = np.unique(temp1, return_counts=True)
-        # imec side
-        dist2 = np.abs(illuminant_wvs[:,np.newaxis],imec_NIR_wvs)
-        temp2 = dist2.argmin(axis=1)
-        closest_NIR_bands_imec, _ = np.unique(temp2, return_counts=True)
-        # closest_bands_illuminant = self.get_closest_wavelengths(imec_NIR_wvs, illuminant_wvs)
-        # closest_NIR_bands_imec = self.get_closest_wavelengths(illuminant_wvs,imec_NIR_wvs)
-        min_count = np.min((len(closest_bands_illuminant),len(closest_NIR_bands)))
-        closest_bands_illuminant = closest_bands_illuminant[:min_count]  # illuminant side
-        closest_NIR_bands_imec = closest_NIR_bands_imec[:min_count]  # imec side
-        #-------- get data according to closest wavelength indexes
-        closest_NIR_illuminant = illuminant[closest_bands_illuminant,:]
-        closest_imec_NIR_ssfs = imec_ssfs['responses'][closest_NIR_bands_imec, :]  # SSFS at 721 nm -- 901.7 nm
-        closest_NIR_reflectance = cube[:, :, closest_NIR_bands_imec]
-        closest_NIR_reflectance = closest_NIR_reflectance.reshape((lines * columns), len(closest_NIR_bands_imec))
-        # ------------------------------------------------------------------------------------
-        Max_SSFS_responses = np.asarray([np.max(closest_imec_NIR_ssfs[i,:]) for i in range(len(closest_imec_NIR_ssfs))])  # consider the SSFS as delta dirac functions
-        NIR_channel = np.zeros(len(closest_NIR_reflectance), dtype=np.float32)
-        for i in range(len(closest_NIR_reflectance)):
-            NIR_channel[i] = (np.sum((closest_NIR_reflectance[i, :].T) * Max_SSFS_responses * closest_NIR_illuminant))/ (np.sum(Max_SSFS_responses*closest_NIR_illuminant))
-        NIR_channel = NIR_channel.reshape(lines, columns)
-        return NIR_channel
-
-    @staticmethod
-    @jit(nopython=True)
-    def simulate_NIR_band_from_radiance(closest_NIR_radiance,imec_NIR_ssfs,lines,columns):
-        # ignored_bands_idx1 = [0, 56, 57, 58, 59, 60, 61, 62, 63, 64]
-        # ignored_bands_idx2 = [x for x in range(172, 192)]
-        # all_ignored_bands = ignored_bands_idx1 + ignored_bands_idx2  #
-        # used_bands = [k for k in range(192) if k not in all_ignored_bands]
-        # NIR_idx = used_bands[84:]  # 721 nm -- 901.7 nm
-        # imec_NIR_ssfs = imec_ssfs['responses'][NIR_idx, :]  # SSFS at 721 nm -- 901.7 nm
-        # closest_NIR_radiance = cube[:, :, NIR_idx]
-        # lines, columns, K = closest_NIR_radiance_cube.shape
-        # ------------------------------------------------------------------------------------
-        Max_SSFS_responses = np.asarray([np.max(imec_NIR_ssfs[i, :]) for i in range(len(imec_NIR_ssfs))])  # Max because we consider the SSFS as delta dirac functions
-        NIR_channel = np.zeros(len(closest_NIR_radiance), dtype=np.float32)
-        for i in range(len(closest_NIR_radiance)):
-            NIR_channel[i] = np.sum((closest_NIR_radiance[i, :].T) * Max_SSFS_responses) / np.sum(Max_SSFS_responses)  # Normalize by the sum of all NIR SSFS
-        NIR_channel = NIR_channel.reshape(lines, columns)
-        # NIR_channel = NIR_channel/np.max(NIR_channel) # normalize NIR channel between 0 and 1
-        return NIR_channel
-
-    def get_closest_NIR_radiance(self,cube,imec_ssfs):
-        ignored_bands_idx1 = [0, 56, 57, 58, 59, 60, 61, 62, 63, 64]
-        ignored_bands_idx2 = [x for x in range(172, 192)]
-        all_ignored_bands = ignored_bands_idx1 + ignored_bands_idx2  #
-        used_bands = [k for k in range(192) if k not in all_ignored_bands]
-        NIR_idx = used_bands[84:]  # 721 nm -- 901.7 nm
-        imec_NIR_ssfs = imec_ssfs['responses'][NIR_idx, :]  # SSFS at 721 nm -- 901.7 nm
-        closest_NIR_radiance= cube[:, :, NIR_idx]
-        lines, columns, K = closest_NIR_radiance.shape
-        closest_NIR_radiance =  closest_NIR_radiance.reshape((lines * columns), K)
-        return closest_NIR_radiance,imec_NIR_ssfs
 
     def interpolate_ssfs(self,ssfs_values,wvs_ssfs,step=1):
         ### Used for RGB-NIR SSFS
@@ -731,27 +644,3 @@ class Transform:
             interpolated_spectra.append(s)
         return interpolated_spectra
 
-    def parallel_interpolate(self,spectra,wvs,step=1):
-        executor = Parallel(n_jobs=12, backend='multiprocessing')
-        min_wv = np.min(wvs)
-        max_wv = np.max(wvs)
-        new_wvs = np.arange(min_wv, max_wv, step)
-        Nb_samples = len(spectra)
-        interpolated_spectra = executor(delayed(np.interp)(new_wvs, wvs, spectra[i]) for i in range(Nb_samples))
-        return interpolated_spectra
-
-    # def interp(self,x):
-    #     min_wv = 475
-    #     max_wv = 901
-    #     new_wvs = np.arange(min_wv, max_wv, 1)
-    #     np.interp(np.interp(new_wvs, wvs, x))
-    #
-    # def parallel_predict(self,x):
-    #     import multiprocessing as mp
-    #     pool = mp.Pool(12)
-    #     results = pool.map(np.interp, [spectra.reshape(1,-1) for spectra in x]) # x[s,:].reshape(1,-1)
-    #     pool.close()
-    #     pool.terminate()
-    #     elapsed_time = (time.time()-start)
-    #     print('\nElapsed time = '+str(elapsed_time)+' s\n')
-    #     return results, elapsed_time
