@@ -65,6 +65,3 @@ for number in tqdm(range(len(imageLists))):
     gamma_ciergb = t.adjust_gamma(CIERGB, gamma=2.2)
     np.save(directory + '/' + 'CIERGB_D65.npy', gamma_ciergb)  # Save AdobeRGB image in numpy format
     io.imsave(directory + '/' + 'CIERGB_D65.png', gamma_ciergb)  # Save AdobeRGB image in PNG format
-
-
-
