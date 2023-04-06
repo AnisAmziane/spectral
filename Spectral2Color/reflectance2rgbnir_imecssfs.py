@@ -57,6 +57,3 @@ for number in tqdm(range(len(imageLists))):
     RGBNIR_reflectance = t.Spectralreflectance_to_RGBNIRreflectance(closest_reflectance_spectra, imec_ssfs, closest_bands_rgbnir, 2048, 2048) # Nb pixels = 2048x2048
     np.save(directory + '/'+'RGBNIR_IMEC_reflectance_rw.npy',RGBNIR_reflectance) #Save RGBNIR image in numpy format
 
-
-
-
