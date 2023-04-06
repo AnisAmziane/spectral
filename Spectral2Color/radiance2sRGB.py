@@ -63,6 +63,3 @@ for number in tqdm(range(len(imageLists))):
     gamma_srgb = t.normalize8(gamma_srgb) # make it uint8
     np.save(directory + '/'+'sRGB_D65.npy',gamma_srgb) # Save sRGB image in numpy format
     io.imsave(directory + '/'+'sRGB_D65.png',gamma_srgb) # Save sRGB image in PNG format
-
-
-
