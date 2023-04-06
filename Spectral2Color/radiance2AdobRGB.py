@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import spectral.io.envi as envi
-import sys,os
+import sys
+import os
+from tqdm import tqdm
 from skimage import io
 import glob
 from Spectral2Color import ColorTransform as Ct
