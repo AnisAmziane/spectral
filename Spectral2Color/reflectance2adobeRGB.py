@@ -65,6 +65,3 @@ for number in tqdm(range(len(imageLists))):
     gamma_adobe = t.normalize8(gamma_adobe) # make it uint8
     np.save(directory + '/'+'AdobeRGB_D65.npy',gamma_adobe) # Save AdobeRGB image in numpy format
     io.imsave(directory + '/'+'AdobeRGB_D65.png',gamma_adobe) # Save AdobeRGB image in PNG format
-
-
-
