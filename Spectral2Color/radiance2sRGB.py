@@ -36,16 +36,15 @@ def get_hdr_and_raw_paths(images_path):
 base_path = 'path to radiance base' # path to image database of radiance images
 imageLists = get_hdr_and_raw_paths(base_path)
 t = Ct.Transform() # Instance of ColorTransform class
-
-# Convert all images in database to CIE-RGB color space
+# Convert all images in database to sRGB color space
 for number in tqdm(range(len(imageLists))):
     current_image = imageLists[number]
     hdr = current_image[0]
     raw = current_image[1]
     obj = envi.open(hdr, raw)
-    cube = obj.asarray() # K channel radiance
-    rows, cols, K = cube.shape
-    spectra = cube.reshape((rows * cols, K))
+    cube = obj.asarray()
+    rows,cols,K = cube.shape
+    spectra = cube.reshape((rows*cols,K))
     directory = os.path.dirname(obj.filename)
     filename = os.path.basename(obj.filename)
     name, extension = os.path.splitext(filename)
@@ -58,11 +57,12 @@ for number in tqdm(range(len(imageLists))):
     interp_spectra = t.interpolate_spectra(spectra, camera_wvs,step=1)  # Interpolate reflectance spectra at 1nm between 475 and 901 nm
     XYZ_img = t.radiance_to_xyz_v2(interp_spectra, closest_idx, cmf_values, rows, cols)
     ### 2- XYZ to CIE-RGB color space
-    CIERGB = t.XYZ_2_CIERGB(XYZ_img)
-    CIERGB = t.normalize8(CIERGB)
-    gamma_ciergb = t.adjust_gamma(CIERGB, gamma=2.2)
-    np.save(directory + '/' + 'CIERGB_D65.npy', gamma_ciergb)  # Save AdobeRGB image in numpy format
-    io.imsave(directory + '/' + 'CIERGB_D65.png', gamma_ciergb)  # Save AdobeRGB image in PNG format
+    # 2- XYZ to a srgb color space
+    srgb = t.XYZ_2_sRGB(XYZ_img)
+    gamma_srgb = t.apply_srgb_gamma(srgb) # gamma correction
+    gamma_srgb = t.normalize8(gamma_srgb) # make it uint8
+    np.save(directory + '/'+'sRGB_D65.npy',gamma_srgb) # Save sRGB image in numpy format
+    io.imsave(directory + '/'+'sRGB_D65.png',gamma_srgb) # Save sRGB image in PNG format
 
 
 

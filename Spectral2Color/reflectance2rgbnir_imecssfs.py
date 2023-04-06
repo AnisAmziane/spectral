@@ -33,36 +33,30 @@ def get_hdr_and_raw_paths(images_path):
                 imageLists.append(temp)
     return imageLists
 
-base_path = 'path to radiance base' # path to image database of radiance images
+base_path = 'path to reflectance base' # path to image database of reflectance images
 imageLists = get_hdr_and_raw_paths(base_path)
+#
 t = Ct.Transform() # Instance of ColorTransform class
-
-# Convert all images in database to CIE-RGB color space
+imec_ssfs = np.load('/utils/new_imec_ssfs_1nm.npy') # snapscan wavelengths interpolated at 1nm
+#
 for number in tqdm(range(len(imageLists))):
     current_image = imageLists[number]
     hdr = current_image[0]
     raw = current_image[1]
     obj = envi.open(hdr, raw)
-    cube = obj.asarray() # K channel radiance
-    rows, cols, K = cube.shape
-    spectra = cube.reshape((rows * cols, K))
+    camera_wvs = obj.metadata['wavelength']
+    camera_wvs = np.asarray([np.round(float(camera_wvs[i]), 1) for i in range(len(camera_wvs))])
+    cube = obj.asarray()
     directory = os.path.dirname(obj.filename)
     filename = os.path.basename(obj.filename)
     name, extension = os.path.splitext(filename)
     image_name = os.path.basename(directory)
-    print('Procesing image ' + os.path.basename(image_name))
-    ### 1- Radiance spectra to XYZ color space
-    camera_wvs = obj.metadata['wavelength']
-    camera_wvs = np.asarray([np.round(float(camera_wvs[i]), 1) for i in range(len(camera_wvs))])
-    closest_idx, cmf_values = t.find_closest_spectra_cmf_illuminant_with_interpolation(camera_wvs)
-    interp_spectra = t.interpolate_spectra(spectra, camera_wvs,step=1)  # Interpolate reflectance spectra at 1nm between 475 and 901 nm
-    XYZ_img = t.radiance_to_xyz_v2(interp_spectra, closest_idx, cmf_values, rows, cols)
-    ### 2- XYZ to CIE-RGB color space
-    CIERGB = t.XYZ_2_CIERGB(XYZ_img)
-    CIERGB = t.normalize8(CIERGB)
-    gamma_ciergb = t.adjust_gamma(CIERGB, gamma=2.2)
-    np.save(directory + '/' + 'CIERGB_D65.npy', gamma_ciergb)  # Save AdobeRGB image in numpy format
-    io.imsave(directory + '/' + 'CIERGB_D65.png', gamma_ciergb)  # Save AdobeRGB image in PNG format
+    print('Procesing image ' + os.path.basename(obj.filename))
+    #----- Simulate RGB+NIR reflectance images images from K-channel reflectance images using IMEC SSFS
+    closest_reflectance_spectra, closest_bands_rgbnir = t.get_closest_reflectance_spectra_to_targetssfs(cube,camera_wvs, imec_ssfs)
+    RGBNIR_reflectance = t.Spectralreflectance_to_RGBNIRreflectance(closest_reflectance_spectra, imec_ssfs, closest_bands_rgbnir, 2048, 2048) # Nb pixels = 2048x2048
+    np.save(directory + '/'+'RGBNIR_IMEC_reflectance_rw.npy',RGBNIR_reflectance) #Save RGBNIR image in numpy format
+
 
 
 
