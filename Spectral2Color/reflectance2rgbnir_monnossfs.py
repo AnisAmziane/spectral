@@ -39,7 +39,6 @@ imageLists = get_hdr_and_raw_paths(base_path)
 t = Ct.Transform() # Instance of ColorTransform class
 monno_ssfs = np.load('/home/anis/PycharmProjects/ms_propject/venv/Codes/requirements/new_monno_ssfs_1nm.npy')
 ##-------------------------------------------------------
-
 for number in tqdm(range(len(imageLists))):
     current_image = imageLists[number]
     hdr = current_image[0]
