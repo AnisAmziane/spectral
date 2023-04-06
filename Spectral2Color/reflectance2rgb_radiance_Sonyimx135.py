@@ -100,7 +100,3 @@ for number in tqdm(range(len(imageLists))):
     Sony_RGB_D65 = t.normalize8(Sony_RGB_D65)
     gamma_Sony_RGB_D65 = t.adjust_gamma(Sony_RGB_D65, gamma=2.0)
     io.imsave(directory + '/'+'RGB_'+rgb_camera+'_'+E+'.png',RGBNIR_reflectance) #Save RGBNIR image in PNG format
-
-
-
-
