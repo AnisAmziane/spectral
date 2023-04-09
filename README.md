@@ -10,9 +10,8 @@
 ├── reflectance2adobeRGB.py: transform multispectral reflectance images to Adobe RGB color space
 ├── reflectance2CIERGB.py: transform multispectral reflectance images to CIE RGB color space
 ├── reflectance2rgb_radiance_Sonyimx135.py: transform multispectral reflectance images to RGB radiance images based on SONY IMX135 color camera SSFs and a specified illuminant 
-├── reflectance2rgbnir_imecssfs.py: transform multispectral reflectance images to RGB-NIR reflectance images using IMEC RGB-NIR camera SSFs
-├── reflectance2rgbnir_monnossfs.py: transform multispectral reflectance images to RGB-NIR reflectance images using Monno RGB-NIR camera SSFs
-├── reflectance2sRGB.py: transform multispectral reflectance images to sRGB color space (radiance)
+├── reflectance2rgbnir_imecssfs.py: transform multispectral reflectance images to RGB-NIR reflectance images using <a href="https://www.imechyperspectral.com/en/cameras/ximea-snapshot-rgb-nir#specs" target ="_top">IMEC</a> RGB-NIR camera SSFs
+├── reflectance2rgbnir_monnossfs.py: transform multispectral reflectance images to RGB-NIR reflectance images using <a href="https://www.semanticscholar.org/paper/Single-Sensor-RGB-NIR-Imaging%3A-High-Quality-System-Monno-Teranaka/07d7936bcd3cde230167fcb1352cd3a8b918e6d6" target="_top">Monno et al.</a> RGB-NIR camera SSFs
 </code></pre></div>
 
 
